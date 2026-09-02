@@ -121,28 +121,32 @@ def fit_width_model(orig_doc, per_charpr=False):
 # ---------------------------------------------------------------- 줄 나누기
 def wrap(text, cap, a, b):
     """cap(em) 안에 들어가도록 줄을 나눠 각 줄의 시작 위치를 돌려준다.
-       줄 끝의 공백은 조판 관례대로 폭 계산에서 제외한다."""
+       - 줄 끝의 공백은 조판 관례대로 폭 계산에서 제외한다.
+       - URL 처럼 공백 없이 긴 토큰은 '/', '-' 뒤에서도 끊을 수 있게 해
+         앞줄이 거의 비어 버리는 것을 막는다."""
     starts, i, n = [0], 0, len(text)
     while i < n:
         w = 0.0          # 줄 끝 공백을 뺀 실제 폭
         pend = 0.0       # 아직 확정되지 않은 공백 폭
-        j, last_break = i, -1
+        j, last_break, tok = i, -1, 0
         while j < n:
             c = text[j]
             if c == '\n':
                 j += 1; last_break = j; break
             cw = b if is_wide(c) else a
             if c == ' ':
-                pend += cw
-                j += 1
-                last_break = j          # 공백 뒤는 항상 줄바꿈 가능
+                pend += cw; j += 1; tok = 0
+                last_break = j                    # 공백 뒤는 항상 끊을 수 있다
                 continue
             if w + pend + cw > cap:
                 j = last_break if last_break > i else max(j, i + 1)
                 break
             w += pend + cw; pend = 0.0
-            j += 1
-            if is_wide(c): last_break = j
+            j += 1; tok += 1
+            if is_wide(c):
+                last_break = j                    # 한글·한자 뒤는 어디서든
+            elif c in '/-' and tok >= 6:
+                last_break = j                    # 긴 토큰(URL 등) 안의 구분자 뒤
         else:
             j = n
         if j <= i: j = i + 1

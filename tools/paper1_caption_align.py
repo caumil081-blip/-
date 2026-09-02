@@ -6,7 +6,9 @@ sys.path.insert(0, '.')
 import relayout as R
 
 H, S = 'extracted/Contents/header.xml', 'extracted/Contents/section0.xml'
-CAP = re.compile(r'^(표|그림|알고리즘|Table|Fig\.|Algorithm) \d+\.')
+# 표·알고리즘 캡션만 양쪽 정렬. 그림 캡션은 가운데 정렬을 유지한다.
+JUST = re.compile(r'^(표|알고리즘|Table|Algorithm) \d+\.')
+KEEP = re.compile(r'^(그림|Fig\.) \d+\.')
 
 h = open(H, encoding='utf-8').read()
 cnt = int(re.search(r'<hh:paraProperties itemCnt="(\d+)">', h).group(1))
@@ -27,11 +29,17 @@ for s, e in R.paragraphs(d):
     m = re.match(r'<hp:p [^>]*?paraPrIDRef="1" styleIDRef="6"', para)
     if not m: continue
     if '<hp:tbl' in para or '<hp:pic' in para: continue      # 표/그림 담은 문단 제외
-    if not CAP.match(R.own_text(para).strip()): continue     # 캡션 글자 줄만
+    if not JUST.match(R.own_text(para).strip()): continue    # 표/알고리즘 캡션만
     head_end = para.index('>') + 1
     head = para[:head_end].replace('paraPrIDRef="1"', 'paraPrIDRef="%d"' % new_id, 1)
     edits.append((s, s + head_end, head)); n += 1
 for x, y, rep in sorted(edits, reverse=True):
     d = d[:x] + rep + d[y:]
 open(S, 'w', encoding='utf-8').write(d)
-print('새 paraPr id=%d(양쪽 정렬) 추가 / 캡션 글자 줄 %d개에만 적용' % (new_id, n))
+kept = sum(1 for s, e in R.paragraphs(d)
+           if re.match(r'<hp:p [^>]*?paraPrIDRef="1" styleIDRef="6"', d[s:e])
+           and '<hp:tbl' not in d[s:e] and '<hp:pic' not in d[s:e]
+           and KEEP.match(R.own_text(d[s:e]).strip()))
+print('새 paraPr id=%d(양쪽 정렬) 추가' % new_id)
+print('  표·알고리즘 캡션 %d개 -> 양쪽 정렬' % n)
+print('  그림 캡션 %d개 -> 가운데 정렬 유지' % kept)

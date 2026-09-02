@@ -34,6 +34,16 @@ for key in DROP:
 print('2) KIMST 고유 요소 %d개 삭제' % len(removed))
 for x in removed: print('     - ' + x)
 
+
+# ---------------------------------------------------------------- 2-1) 중복 문단 삭제
+# 서론 첫 문단 바로 뒤에 거의 같은 내용의 초고 문단이 하나 더 남아 있었다.
+DUP = '국방에는 인사·군수·정보·지휘통제·수송처럼 분야마다 각기 만든 정보체계가 많다.'
+hit = [(s0, e0) for s0, e0 in R.paragraphs(d) if R.own_text(d[s0:e0]).strip().startswith(DUP)]
+assert len(hit) == 1, '중복 문단 %d건' % len(hit)
+prev = [R.own_text(d[a:b]).strip() for a, b in R.paragraphs(d)]
+d = d[:hit[0][0]] + d[hit[0][1]:]
+print('2-1) 서론의 중복 문단 1개 삭제 (초고가 남아 있던 문단)')
+
 # ---------------------------------------------------------------- 3) 한글 요약 신설
 KOR_ABS = open('kor_abs.txt', encoding='utf-8').read()
 

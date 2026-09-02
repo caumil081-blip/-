@@ -37,12 +37,20 @@ for x in removed: print('     - ' + x)
 
 # ---------------------------------------------------------------- 2-1) 중복 문단 삭제
 # 서론 첫 문단 바로 뒤에 거의 같은 내용의 초고 문단이 하나 더 남아 있었다.
+# 주의: 이 텍스트는 교신저자 각주 상자(표)와 '같은 문단' 안에 들어 있으므로
+#       문단을 통째로 지우면 각주 상자까지 사라진다. 텍스트만 제거한다.
 DUP = '국방에는 인사·군수·정보·지휘통제·수송처럼 분야마다 각기 만든 정보체계가 많다.'
-hit = [(s0, e0) for s0, e0 in R.paragraphs(d) if R.own_text(d[s0:e0]).strip().startswith(DUP)]
-assert len(hit) == 1, '중복 문단 %d건' % len(hit)
-prev = [R.own_text(d[a:b]).strip() for a, b in R.paragraphs(d)]
-d = d[:hit[0][0]] + d[hit[0][1]:]
-print('2-1) 서론의 중복 문단 1개 삭제 (초고가 남아 있던 문단)')
+hit = None
+for s0, e0 in R.paragraphs(d):
+    if R.own_text(d[s0:e0]).strip().startswith(DUP):
+        hit = (s0, e0); break
+assert hit, '중복 문단을 찾지 못함'
+para = d[hit[0]:hit[1]]
+own = [para[a:b] for a, b in R.own_parts(para)]
+targets = [t for seg in own for t in re.findall(r'<hp:t>.*?</hp:t>', seg, re.S)]
+assert len(targets) == 1, '깊이0 텍스트가 %d개' % len(targets)
+d = d[:hit[0]] + para.replace(targets[0], '', 1) + d[hit[1]:]
+print('2-1) 서론의 중복 텍스트 제거 (각주 상자는 보존)')
 
 # ---------------------------------------------------------------- 3) 한글 요약 신설
 KOR_ABS = open('kor_abs.txt', encoding='utf-8').read()

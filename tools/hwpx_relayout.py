@@ -188,46 +188,31 @@ def rebuild_segs(orig_segs, new_starts):
 
 # ---------------------------------------------------------------- 본 처리
 def relayout(orig_doc, new_doc):
-    a, b, nrows, per = fit_width_model(orig_doc, per_charpr=True)
+    """본문이 바뀐 문단의 linesegarray(줄 나눔 캐시)를 '삭제'한다.
+
+    한글은 문서를 열 때 이 캐시를 그대로 믿고 렌더링하므로, 캐시를 남겨두거나
+    근사 모델로 새로 계산해 넣으면 줄이 겹치거나 양쪽 정렬이 자간을 벌린다.
+    캐시를 지우면 한글이 자기 폰트 메트릭으로 다시 조판하므로 양식 그대로 나온다.
+    """
     op, np_ = paragraphs(orig_doc), paragraphs(new_doc)
     otxt = [own_text(orig_doc[s:e]) for s, e in op]
     ntxt = [own_text(new_doc[s:e]) for s, e in np_]
 
-    # 원본 문단 <-> 수정본 문단 정렬
     sm = difflib.SequenceMatcher(a=otxt, b=ntxt, autojunk=False)
-    pair = {}                      # 수정본 index -> 원본 index (없으면 None)
+    same = set()                       # 내용이 그대로인 수정본 문단 index
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == 'equal':
-            for k in range(i2 - i1): pair[j1 + k] = i1 + k
-        elif tag == 'replace':
-            for k in range(j2 - j1):
-                pair[j1 + k] = i1 + min(k, i2 - i1 - 1) if i2 > i1 else None
-        else:
-            for k in range(j1, j2): pair.setdefault(k, None)
+            same.update(range(j1, j2))
 
-    edits, changed = [], 0
+    edits, removed = [], 0
     for j, (s, e) in enumerate(np_):
+        if j in same:
+            continue                   # 손대지 않은 문단은 캐시를 그대로 둔다
         para = new_doc[s:e]
         blk = own_segblock(para)
-        if not blk: continue
-        i = pair.get(j)
-        if i is not None and otxt[i] == ntxt[j]:
-            continue                                   # 내용 그대로면 손대지 않는다
-        src = orig_doc[op[i][0]:op[i][1]] if i is not None else para
-        sblk = own_segblock(src)
-        orig_segs = SEG.findall(src[sblk[0]:sblk[1]]) if sblk else SEG.findall(para[blk[0]:blk[1]])
-        if not orig_segs: continue
-        vs = int(re.search(r'vertsize="(\d+)"', orig_segs[0]).group(1))
-        if vs <= 0: continue
-        hz = int(re.search(r'horzsize="(\d+)"', orig_segs[0]).group(1))
-        # 단 폭 기준 용량. 원본 362개 문단 재현 검증에서 '줄 수를 적게 잡는' 사례가
-        # 0건이라, 글자가 겹칠 가능성이 없는 쪽으로만 오차가 생긴다.
-        # 전역 단일 모델이 원본 362개 문단 재현에서 가장 정확하고(88.1%),
-        # '줄 수를 실제보다 적게 잡는' 사례가 0건이라 글자가 겹칠 수 없다.
-        starts = wrap(ntxt[j], hz / vs, a, b)
-        newblk = '<hp:linesegarray>' + ''.join(rebuild_segs(orig_segs, starts)) + '</hp:linesegarray>'
-        if newblk != para[blk[0]:blk[1]]:
-            edits.append((s + blk[0], s + blk[1], newblk)); changed += 1
+        if not blk:
+            continue
+        edits.append((s + blk[0], s + blk[1], '')); removed += 1
     for x, y, rep in sorted(edits, reverse=True):
         new_doc = new_doc[:x] + rep + new_doc[y:]
-    return new_doc, dict(a=a, b=b, samples=nrows, changed=changed)
+    return new_doc, dict(removed=removed)
